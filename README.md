@@ -12,22 +12,45 @@ exit - завершить работу программы
 Пример использования:
 
 $ database
+
 СУБД запущена
+
 Напишите help для получения справочной информации
+
 >> help
+
 Функции:
+
 <command> create_table <имя_таблицы> <столбец1:тип> <столбец2:тип> .. - создать таблицу
+
 <command> list_tables - показать список таблиц
+
 <command> drop_table <имя_таблицы> - удалить таблицу
+
 <command> exit - выйти из программы
+
 <command> help - справочная информация
+
 >> create_table users name:str age:int
+
 Таблица users создана
+
 >> list_tables
+
 ['users']
+
 >> drop_table users
+
 Таблица users удалена
+
 >> list_tables
+
 []
+
 >> exit
+
 База данных завершила свою работу
+
+Демонстрация работы с записью через asciinema:
+
+https://asciinema.org/a/v9vZzHVFHEulkD28
