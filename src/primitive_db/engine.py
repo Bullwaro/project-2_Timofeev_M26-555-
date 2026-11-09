@@ -1,23 +1,12 @@
 import shlex
-from prettytable import PrettyTable
 
 import prompt
+from prettytable import PrettyTable
 
+from .constants import METADATA_FILE
+from .core import create_table, delete, drop_table, insert, select, update
 from .parser import parse_clause
-from .core import (
-                    create_table, 
-                    drop_table, 
-                    insert, 
-                    select, 
-                    update, 
-                    delete
-                   )
-from .utils import (
-                    load_metadata, 
-                    save_metadata, 
-                    load_table_data, 
-                    save_table_data
-                    )
+from .utils import load_metadata, load_table_data, save_metadata, save_table_data
 
 
 def run():
@@ -26,7 +15,7 @@ def run():
         "Напишите help для получения справочной информации"
         )
     while True:
-        metadata = load_metadata("db_meta.json")
+        metadata = load_metadata(METADATA_FILE)
         args = shlex.split(prompt.string(">> "))
 
         if not args:
@@ -45,29 +34,41 @@ def run():
                     "<command> help - справочная информация"
 
                     "\nCRUD-операции"
-                    "<command> insert <table> <value>"
-                    "<command> select <table> [where <clause>]"
-                    "<command> update <table> set <clause> where <clause>"
-                    "<command> delete <table> where <clause>"
-                    "где clause вводится через пробел в виде <столбец> = <значение>"
-
+                    "<command> insert <имя_таблицы> <значение1> <значение2> <..>"
+                    " - вставить запись\n"
+                    "<command> select <имя_таблицы> [where <условие>]"
+                    " - вывести значения таблицы\n"
+                    "<command> update <имя_таблицы> set <условие> where <условие>"
+                    " - заменить значение в таблице\n"
+                    "<command> delete <имя_таблицы> where <условие>"
+                    " - удалить запись\n"
+                    "где <условие> вводится через пробел в виде: "
+                    "<столбец> = <значение>\n"
+                    "условие в [] опционально"
                     )
             case "exit":
                 print("База данных завершила свою работу")
                 break
 
             case "create_table":
-                metadata = create_table(metadata, args[1], args[2:])
-                save_metadata("db_meta.json", metadata)
-                print(f"Таблица {args[1]} создана")
+                result = create_table(metadata, args[1], args[2:])
+
+                if result is not None:
+                    save_metadata(METADATA_FILE, result)
+                    print(f"Таблица {args[1]} создана")
 
             case "drop_table":
-                metadata = drop_table(metadata, args[1])
-                save_metadata("db_meta.json", metadata)
-                print(f"Таблица {args[1]} удалена")
+                result = drop_table(metadata, args[1])
+
+                if result is not None:
+                    save_metadata(METADATA_FILE, result)
+                    print(f"Таблица {args[1]} удалена")
 
             case "list_tables":
-                print(list(metadata.keys()))
+                if list(metadata.keys()) != []:
+                    print("Таблицы:\n", "\n".join(metadata.keys()), sep='')
+                else:
+                    print("Созданных таблиц не обнаружено")
 
             case "insert":
                 table_name = args[1]
@@ -76,62 +77,70 @@ def run():
                     for value in args[2:]
                 ]
 
-                try:
-                    data = insert(metadata, table_name, values)
+                data = insert(metadata, table_name, values)
+
+                if data is not None:
                     print("Данные записаны")
-                except (ValueError, IndexError) as error:
-                    print(error)
 
             case "select":
                 table_name = args[1]
                 table_data = load_table_data(table_name)
 
-                try:
-                    if len(args) > 2:
-                        where_clause = parse_clause(" ".join(args[3:]))
-                        result = select(table_data, where_clause)
-                    else:
-                        result = select(table_data)
+                if len(args) > 2:
+                    if args[2] != "where":
+                        print("Ожидалось where")
+                        continue
 
-                    if result:
-                        table = PrettyTable()
-                        table.field_names = result[0].keys()
+                    where_clause = parse_clause(" ".join(args[3:]))
+                    result = select(table_data, where_clause)
+                else:
+                    result = select(table_data)
 
-                        for row in result:
-                            table.add_row(row.values())
+                if result is None:
+                    continue
 
-                        print(table)
-                    else:
-                        print("Не найдено записей")
-                except (ValueError, IndexError) as error:
-                    print(error)
+                if result:
+                    table = PrettyTable()
+                    table.field_names = result[0].keys()
+
+                    for row in result:
+                        table.add_row(row.values())
+
+                    print(table)
+                else:
+                    print("Не найдено записей")
 
             case "update":
                 table_name = args[1]
                 table_data = load_table_data(table_name)
 
-                try:
-                    set_clause = parse_clause(" ".join(args[3:6]))
-                    where_clause = parse_clause(" ".join(args[7:]))
+                if args[2] != "set" or args[6] != "where":
+                    print("Ожидались set и where")
+                    continue
 
-                    data = update(table_data, set_clause, where_clause)
+                set_clause = parse_clause(" ".join(args[3:6]))
+                where_clause = parse_clause(" ".join(args[7:]))
+
+                data = update(table_data, set_clause, where_clause)
+
+                if data is not None:
                     save_table_data(table_name, data)
                     print("Данные обновлены")
-                except (ValueError, IndexError) as error:
-                    print(error)
 
             case "delete":
                 table_name = args[1]
                 table_data = load_table_data(table_name)
 
-                try:
-                    where_clause = parse_clause(" ".join(args[3:]))
+                if args[2] != "where":
+                    print("Ожидалось where")
+                    continue
 
-                    data = delete(table_data, where_clause)
+                where_clause = parse_clause(" ".join(args[3:]))
+                data = delete(table_data, where_clause)
+
+                if data is not None:
                     save_table_data(table_name, data)
                     print("Записи удалены")
-                except (ValueError, IndexError) as error:
-                    print(error)
 
             case _:
                 print(
